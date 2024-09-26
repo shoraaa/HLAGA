@@ -5,7 +5,7 @@ CXXFLAGS_COMMON = -std=c++20 -Wall -Wpedantic -Wextra -fexceptions -fopenmp
 MODE = release
 
 ifeq ($(MODE),release)
-	CXXFLAGS = $(CXXFLAGS_COMMON) -O3 -g -march=native -flto=6 -mavx2 -DNDEBUG
+	CXXFLAGS = $(CXXFLAGS_COMMON) -O3 -g -march=native -flto=auto -mavx2 -DNDEBUG
 else
 	CXXFLAGS = $(CXXFLAGS_COMMON) -g
 endif
