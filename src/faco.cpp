@@ -1680,7 +1680,7 @@ int main(int argc, char *argv[]) {
                     answer.max_cost = static_cast<int64_t>(max_cost);
                     answer.max_err = problem.calc_relative_error(max_cost);
                     answer.stdev = sample_stdev(costs);
-                    answer.mean_time = trial_timer();
+                    answer.mean_time = trial_timer() / args.repeat_;
                 }
                 
                 exp_log("trial stdev cost", sample_stdev(costs));
@@ -1690,7 +1690,7 @@ int main(int argc, char *argv[]) {
                     res_filepath = get_results_file_path(args, problem).string();
                 }
                 if (ofstream out(res_filepath); out.is_open()) {
-                    cout << "Saving results to: " << res_filepath << endl;
+                    // cout << "Saving results to: " << res_filepath << endl;
                     out << experiment_record.dump(1);
                     out.close();
                 }
