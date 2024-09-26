@@ -1,0 +1,99 @@
+{
+ "args": {
+  "alg": "mfaco",
+  "ants": 64,
+  "backup list size": 64,
+  "beta": 1.0,
+  "cand list size": 16,
+  "count new edges": 0,
+  "gbest as source prob": 0.01,
+  "id": "default",
+  "iterations": 200,
+  "keep better ant sol": 1,
+  "local search": 1,
+  "ls cand list size": 20,
+  "min new edges": 8,
+  "p best": 0.1,
+  "picture": true,
+  "problem": "kroA100.tsp",
+  "repeat": 5,
+  "results dir": "results",
+  "rho": 0.5,
+  "seed": 1709234568,
+  "source sol local update": 1,
+  "threads": 0
+ },
+ "executions": [
+  {
+   "ants solutions updates": 311,
+   "best sol cost iterations": [
+    0,
+    1,
+    2,
+    4,
+    7,
+    10
+   ],
+   "best sol cost times": [
+    0.000348,
+    0.001689,
+    0.002276,
+    0.003739,
+    0.006463,
+    0.009567
+   ],
+   "best sol cost values": [
+    2620.0,
+    2618.0,
+    2616.0,
+    2610.0,
+    2609.0,
+    2604.0
+   ],
+   "execution time": 0.1924245,
+   "final cost": 2604.0,
+   "final error": 0.9693679720822024,
+   "finished_at": "2024-09-26T04:37:20.029029600",
+   "initial sol cost": 2628.0,
+   "initial solutions build time": 0.0031214000000000003,
+   "local source solutions updates": 12,
+   "pher_deposition_time": 0.0020003318786621094,
+   "sol cost mean recorded every ith iter": 20,
+   "sol cost mean values": [
+    2627.3,
+    2604.4,
+    2604.0,
+    2604.0,
+    2604.0,
+    2604.0,
+    2604.0,
+    2604.0,
+    2604.0,
+    2604.0
+   ],
+   "sol cost stdev recorded every ith iter": 20,
+   "sol cost stdev values": [
+    1.8,
+    1.3,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "started_at": "2024-09-26T04:37:19.836562700",
+   "total new edges": 0
+  }
+ ],
+ "nn and backup lists calc time": 0.005708100000000001,
+ "trial max cost": 2604,
+ "trial max error": 0.9693679720822024,
+ "trial mean cost": 2604.0,
+ "trial mean error": 0.9693679720822024,
+ "trial min cost": 2604,
+ "trial min error": 0.9693679720822024,
+ "trial stdev cost": 0.0
+}
