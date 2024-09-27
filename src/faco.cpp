@@ -1573,7 +1573,7 @@ int main(int argc, char *argv[]) {
         omp_set_num_threads(args.threads_);
     }
 
-    vector<string> problem_paths = {"instances\\a280.tsp", "instances\\lin318.tsp", "instances\\ali535.tsp", "instances\\rat783.tsp"};
+    vector<string> problem_paths = {"instances/a280.tsp", "instances/lin318.tsp", "instances/ali535.tsp", "instances/rat783.tsp"};
 
     auto tryACO = [&](std::string algorithm, string problem_path) {
         Result answer;
