@@ -1573,7 +1573,10 @@ int main(int argc, char *argv[]) {
         omp_set_num_threads(args.threads_);
     }
 
-    vector<string> problem_paths = {"instances/a280.tsp", "instances/lin318.tsp", "instances/ali535.tsp", "instances/rat783.tsp"};
+    const string prefix_instances = "instances/";
+    const string suffix_instances = ".tsp";
+
+    vector<string> problems = {"lin318", "pcb442", "att532", "rat783", "pr1002"};
 
     auto tryACO = [&](std::string algorithm, string problem_path) {
         Result answer;
@@ -1618,11 +1621,11 @@ int main(int argc, char *argv[]) {
             experiment_record["executions"] = json::array();
             vector<double> costs;
 
-            printf("%-12s%-12s%-12s%-12s%-12s%-12s%-12s%-12s%-12s\n", "Ant", "Iterations", "beta", "rho", "Backup", "Candidate", "MNE", "LS", "LS Candidate"); 
-            printf("%-12d%-12d%-12.2f%-12.2f%-12d%-12d%-12d%-12d%-12d\n", args.ants_count_, args.iterations_, args.beta_, args.rho_, args.backup_list_size_, args.cand_list_size_, args.min_new_edges_, args.local_search_, args.ls_cand_list_size_); 
-
             Timer trial_timer;
             std::string res_filepath{};
+
+            printf("%-12s%-12s%-12s%-12s%-12s%-12s%-12s%-12s%-12s\n", "Ant", "Iterations", "beta", "rho", "Backup", "Candidate", "MNE", "LS", "LS Candidate"); 
+            printf("%-12d%-12d%-12.2f%-12.2f%-12d%-12d%-12d%-12d%-12d\n", args.ants_count_, args.iterations_, args.beta_, args.rho_, args.backup_list_size_, args.cand_list_size_, args.min_new_edges_, args.local_search_, args.ls_cand_list_size_); 
 
             printf("%-20s%-20s%-10s%-10s\n", "Run", "Cost", "Error", "Time"); 
 
@@ -1703,16 +1706,20 @@ int main(int argc, char *argv[]) {
     };
 
     vector<Result> results;
-    for (auto& problem : problem_paths) {
-        results.emplace_back(tryACO(args.algorithm_, problem));
+    for (auto& problem : problems) {
+        string problem_path = prefix_instances + problem + suffix_instances;
+        results.emplace_back(tryACO(args.algorithm_, problem_path));
     }
+
+    printf("%-12s%-12s%-12s%-12s%-12s%-12s%-12s%-12s%-12s\n", "Ant", "Iterations", "beta", "rho", "Backup", "Candidate", "MNE", "LS", "LS Candidate"); 
+            printf("%-12d%-12d%-12.2f%-12.2f%-12d%-12d%-12d%-12d%-12d\n", args.ants_count_, args.iterations_, args.beta_, args.rho_, args.backup_list_size_, args.cand_list_size_, args.min_new_edges_, args.local_search_, args.ls_cand_list_size_); 
     printf("Result for running algorithm %s after %d run with testcase(s):\n", args.algorithm_.c_str(), args.repeat_);
 
-    printf("%-30s%-12s%-12s%-12s%-12s%-12s%-12s%-12s%-12s\n", "Instance", "Mean Cost", "Mean Error", "Min Cost", "Min Error", "Max Cost", "Max Error", "STDEV", "Mean Time"); 
-    for (int i = 0; i < (int)problem_paths.size(); ++i) {
+    printf("%-30s%-12s%-12s%-12s%-12s%-12s%-12s%-12s%-12s\n", "Instance", "Mean Cost", "Min Cost", "Max Cost", "STDEV", "Mean Error", "Min Error", "Max Error", "Mean Time"); 
+    for (int i = 0; i < (int)problems.size(); ++i) {
         auto& r = results[i];
-        auto& problem_path = problem_paths[i];
-        printf("%-30s%-12.2f%-12.2f%-12lld%-12.2f%-12lld%-12.2f%-12.2f%-12.2f\n", problem_path.c_str(), r.mean, r.mean_err, static_cast<int64_t>(r.min_cost), r.min_err, static_cast<int64_t>(r.max_cost), r.max_err, r.stdev, r.mean_time); 
+        string problem_path = prefix_instances + problems[i] + suffix_instances;
+        printf("%-30s%-12ld%-12ld%-12ld%-12.2f%-12.2f%-12.2f%-12.2f%-12.2f\n", problem_path.c_str(), static_cast<int64_t>(r.mean), static_cast<int64_t>(r.min_cost), static_cast<int64_t>(r.max_cost), r.stdev,  r.mean_err, r.min_err, r.max_err, r.mean_time); 
     }
 
     return 0;
