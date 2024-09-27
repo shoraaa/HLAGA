@@ -70,6 +70,12 @@ struct ProgramOptions {
     // Modified FACO -- should the actual # of new edges in the constructed
     // solutions be checked?
     int32_t count_new_edges_ = 0;
+
+    // Restricted ACO -- should we use smoothen pheromone update?
+    int32_t smooth_ = 1;
+
+    // Restricted ACO -- minimum rho for smmas
+    double rho_min_ = -1;
 };
 
 
@@ -97,6 +103,9 @@ void dump(const ProgramOptions &opt, MapT &map) {
     map["keep better ant sol"] = opt.keep_better_ant_sol_;
     map["source sol local update"] = opt.source_sol_local_update_;
     map["count new edges"] = opt.count_new_edges_;
+
+    map["smooth"] = opt.smooth_;
+    map["rho min"] = opt.rho_min_;
 }
 
 ProgramOptions parse_program_options(int argc, char *argv[]);

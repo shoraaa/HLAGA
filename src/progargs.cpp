@@ -105,6 +105,10 @@ ProgramOptions parse_program_options(int argc, char *argv[]) {
 
     p.add("count-new-edges", "Should the actual # of new edges be checked", opts.count_new_edges_);
 
+    p.add("smooth", "should we use smoothen pheromone update?", opts.smooth_);
+
+    p.add("rho-min", "Minimum pheromone for SMMAS algorithm", opts.rho_min_);
+
     p.parse(argc, argv);
 
     return opts;

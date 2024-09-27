@@ -262,6 +262,8 @@ protected:
     const ProblemInstance &problem_;
     double p_best_;
     double rho_;
+    double rho_min_;
+    double deposit_smooth_;
     uint32_t cand_list_size_;
 public:
     Limits trail_limits_;
@@ -286,8 +288,22 @@ public:
                                            p_best_, rho_, solution_cost);
     }
 
+     void init_trail_limits_smooth() {
+        trail_limits_.max_ = 1.0;
+        trail_limits_.min_ = rho_min_ != -1 ? rho_min_ : 1.0 / pow(problem_.dimension_, 1.0 / 4);
+        deposit_smooth_ = rho_ * (trail_limits_.max_ - trail_limits_.min_);
+        // cout << "Rho: " << rho_ << endl;
+        // cout << "Delta Min: " << rho_ * trail_limits_.min_ << endl;
+        // cout << "-Delta Min + Delta Max: " << deposit_smooth_ << endl;
+        get_pheromone().init_smooth(rho_ * trail_limits_.min_);
+    }
+
     void evaporate_pheromone() {
         get_pheromone().evaporate(1 - rho_, trail_limits_.min_);
+    }
+
+    void evaporate_pheromone_smooth() {
+        get_pheromone().evaporate_smooth(1 - rho_);
     }
 
     decltype(auto) get_pheromone() {
@@ -306,6 +322,15 @@ public:
             prev_node = node;
         }
         return deposit;
+    }
+
+    void deposit_pheromone_smooth(const Ant &sol) {
+        auto prev_node = sol.route_.back();
+        auto &pheromone = get_pheromone();
+        for (auto node : sol.route_) {
+            pheromone.increase(prev_node, node, deposit_smooth_, trail_limits_.max_);
+            prev_node = node;
+        }
     }
 };
 
@@ -1113,6 +1138,347 @@ public:
 };
 
 
+class LinkedRoute {
+public:
+
+    int cycle_size;
+    using CostFunction = std::function<double (uint32_t, uint32_t)>;
+
+
+    LinkedRoute(std::vector<uint32_t> route, CostFunction fn)
+        : route_(route),
+          cost_fn_(fn)
+    {
+        positions_.resize(route.size());
+        cycle_size = route.size();
+        uint32_t pos = 0;
+        for (auto node : route) {
+            positions_[node] = pos++;
+        }
+    }
+
+    /**
+    Relocates node so that it directly follows the target node.
+
+    For example, if n denotes the relocated node and t is the target, then:
+        (1 2 3 t 5 6 n 7 8) => (1 2 3 t n 5 6 7 8)
+    or
+        (1 2 3 n 5 6 t 7 8) => (1 2 3 5 6 t n 7 8)
+    
+    The cost of the route is updated.
+    Time complexity is O(n).
+    */
+    void relocate_node(uint32_t target, uint32_t node) {
+        assert(node != target);
+        assert(node < route_.size());
+        assert(target < route_.size());
+
+        if (get_succ(target) == node) { return ; }
+
+        const auto node_pos = positions_[node];
+        const auto target_pos = positions_[target];
+        const auto len = route_.size();
+
+        const auto node_pred = get_pred(node);
+        const auto node_succ = get_succ(node);
+        const auto target_succ = get_succ(target);
+
+        if (target_pos < node_pos) {  // Case 1.
+            // 1 2 3 t 5 6 n 7 8 =>
+            // 1 2 3 t n 7 8 5 6
+            auto beg = route_.begin() + target_pos + 1;
+            auto mid = route_.begin() + node_pos;
+            auto end = route_.end();
+
+            std::rotate(beg, mid, end);
+
+            cycle_size -= mid - beg + 1;
+
+            for (auto i = target_pos; i <= node_pos; ++i) {
+                positions_[route_[i]] = i;
+            }
+        } else { // Case 2.
+            // 1 2 3 n 5 6 t 7 8 =>
+            // n 5 6 t 7 8 1 2 3
+            auto beg = route_.begin();
+            auto mid = route_.begin() + node_pos;
+            auto end = route_.begin() + target_pos + 1;
+            std::rotate(beg, beg + 1, end);
+
+            cycle_size = end - beg;
+
+            for (auto i = node_pos; i <= target_pos; ++i) {
+                positions_[route_[i]] = i;
+            }
+        }
+
+        assert(get_succ(target) == node);
+
+        // We are removing these edges:
+        cost_ += - cost_fn_(node, node_succ)
+                 - cost_fn_(target, target_succ)
+                 + cost_fn_(target, node);
+    }
+
+    void relocate_outcycle_node(uint32_t target, uint32_t node, uint32_t end_path_node) {
+        assert(node != target);
+        assert(node < route_.size());
+        assert(target < route_.size());
+
+        if (get_succ(target) == node) { return ; }
+
+        const auto node_pos = positions_[node];
+        const auto target_pos = positions_[target];
+        const auto len = route_.size();
+
+        const auto node_pred = get_pred(node);
+        const auto node_succ = get_succ(node);
+        const auto target_succ = get_succ(target);
+
+        assert(target_pos < node_pos);
+
+        // 1 2 t 4 5 | 6 n 7 | 8 => 
+        // 4 5 1 2 t n 7 | 6 | 8
+
+        // 1 2 t 4 5 6 n 7 8 
+        // 4 5 1 2 t n 7 6 8
+        const auto pos_end_path_node = positions_[end_path_node];
+        // [0, t + 1, cycle_size), [cycle_size, node, pos_end_path_node+1)
+        auto beg = route_.begin();
+        auto mid = route_.begin() + target_pos + 1;
+        auto end = route_.begin() + cycle_size;
+
+        std::rotate(beg, mid, end);
+
+        beg = route_.begin() + cycle_size;
+        mid = route_.begin() + node_pos;
+        end = route_.begin() + pos_end_path_node + 1;
+
+        std::rotate(beg, mid, end);
+
+
+        cycle_size = -1;
+
+        for (auto i = target_pos; i <= node_pos; ++i) {
+            positions_[route_[i]] = i;
+        }
+
+        assert(get_succ(target) == node);
+
+        // We are removing these edges:
+        cost_ += - cost_fn_(node, node_succ)
+                 - cost_fn_(target, target_succ)
+                 + cost_fn_(target, node);
+    }
+
+    bool in_cycle(uint32_t node) {
+        return positions_[node] < cycle_size;
+    }
+
+    bool include(uint32_t first, uint32_t last, uint32_t node) {
+        return positions_[first] <= positions_[node] && positions_[node] <= positions_[last];
+    }
+
+    size_t size() const { return route_.size(); }
+
+    uint32_t operator[](uint32_t index) const {
+        assert(index < route_.size());
+        return route_[index]; 
+    }
+
+    uint32_t get_succ(uint32_t node) const {
+        assert(node < route_.size());
+        auto pos = positions_.at(node);
+        return (pos + 1 == cycle_size)
+             ? route_[0]
+             : route_[pos + 1];
+    }
+
+    uint32_t get_pred(uint32_t node) const {
+        assert(node < route_.size());
+        auto pos = positions_.at(node);
+        return pos == 0
+             ? route_[cycle_size - 1]
+             : route_[pos - 1];
+    }
+
+    bool contains_edge(uint32_t a, uint32_t b) const {
+        return b == get_succ(a) || b == get_pred(a);
+    }
+
+    bool contains_directed_edge(uint32_t a, uint32_t b) const {
+        return b == get_succ(a);
+    }
+
+    /*
+    * This performs a 2-opt move by flipping a section of the route.  The
+    * boundaries of the section are given by first and last, i.e.  it reverses
+    * the segment [start_node, ..., end_node), however it may happen that the section is
+    * very long compared to the remaining part of the route. In such case, the
+    * remaining part is flipped, to speed things up as the result of such flip
+    * results in equivalent solution.
+    */
+    int32_t flip_route_section(int32_t start_node, int32_t end_node) {
+        auto first = positions_[start_node];
+        auto last = positions_[end_node];
+
+        if (first > last) {
+            std::swap(first, last);
+        }
+
+        const auto length = static_cast<int32_t>(route_.size());
+        const int32_t segment_length = last - first;
+        const int32_t remaining_length = length - segment_length;
+
+        if (segment_length <= remaining_length) {  // Reverse the specified segment
+            std::reverse(route_.begin() + first, route_.begin() + last);
+
+            for (auto k = first; k < last; ++k) {
+                positions_[ route_[k] ] = k;
+            }
+            return first;
+        } else {  // Reverse the rest of the route, leave the segment intact
+            first = (first > 0) ? first - 1 : length - 1;
+            last = last % length;
+            std::swap(first, last);
+            int32_t l = first;
+            int32_t r = last;
+            int32_t i = 0;
+            int32_t j = length - first + last + 1;
+            while(i++ < j--) {
+                std::swap(route_[l], route_[r]);
+                positions_[route_[l]] = l;
+                positions_[route_[r]] = r;
+                l = (l+1) % length;
+                r = (r > 0) ? r - 1 : length - 1;
+            }
+        }
+        return 0;
+    }
+
+    double get_dist_to_succ(uint32_t node) {
+        return cost_fn_(node, get_succ(node));
+    }
+
+    /**
+     * This impl. of the 2-opt heuristic uses a queue of nodes to check for an
+     * improving move, i.e. checklist. This is useful to speed up computations
+     * if the route was 2-optimal but a few new edges were introduced -- endpoints
+     * of the new edges should be inserted into checklist.
+     */
+    void two_opt_nn(const ProblemInstance &instance,
+                    std::vector<uint32_t> &checklist,
+                    uint32_t nn_list_size) {
+
+        // We assume symmetry so that the order of the nodes does not matter
+        assert(instance.is_symmetric_);
+
+        // Setting maximum number of allowed route changes prevents very long-running times
+        // for very hard to solve TSP instances.
+        const uint32_t MaxChanges = size();
+        uint32_t changes_count = 0;
+
+        double cost_change = 0;
+
+        size_t checklist_pos_pos = 0;
+        while (checklist_pos_pos < checklist.size() && changes_count < MaxChanges) {
+            auto a = checklist[checklist_pos_pos++];
+            assert(a < route_.size());
+
+            auto a_next = get_succ(a);
+            auto a_prev = get_pred(a);
+
+            auto dist_a_to_next = get_dist_to_succ(a);// instance.get_distance(a, a_next);
+            auto dist_a_to_prev = get_dist_to_succ(a_prev);
+
+            double max_diff = -1;
+            std::array<uint32_t, 4> move;
+
+            const auto &nn_list = instance.get_nearest_neighbors(a, nn_list_size);
+
+            for (auto b : nn_list) {
+                auto dist_ab = instance.get_distance(a, b);
+                if (dist_a_to_next > dist_ab) {
+                    // We rotate the section between a and b_next so that
+                    // two new (undirected) edges are created: { a, b } and { a_next, b_next }
+                    //
+                    // a -> a_next ... b -> b_next
+                    // a -> b ... a_next -> b_next
+                    //
+                    // or
+                    //
+                    // b -> b_next ... a -> a_next
+                    // b -> a ... b_next -> a_next
+                    auto b_next = get_succ(b);
+
+                    auto diff = dist_a_to_next
+                            + get_dist_to_succ(b) //instance.get_distance(b, b_next)
+                            - dist_ab
+                            - instance.get_distance(a_next, b_next);
+
+                    if (diff > max_diff) {
+                        move = { a_next, b_next, a, b };
+                        max_diff = diff;
+                    }
+                } else {
+                    break ;
+                }
+            }
+
+            for (auto b : nn_list) {
+                auto dist_ab = instance.get_distance(a, b);
+                if (dist_a_to_prev > dist_ab) {
+                    // We rotate the section between a_prev and b so that
+                    // two new (undirected) edges are created: { a, b } and { a_prev, b_prev }
+                    //
+                    // a_prev -> a ... b_prev -> b
+                    // a_prev -> b_prev ... a -> b
+                    //
+                    // or
+                    //
+                    // b_prev -> b ... a_prev -> a
+                    // b_prev -> a_prev ... b -> a
+                    auto b_prev = get_pred(b);
+
+                    auto diff = dist_a_to_prev
+                            + get_dist_to_succ(b_prev)
+                            - dist_ab
+                            - instance.get_distance(a_prev, b_prev);
+
+                    if (diff > max_diff) {
+                        move = { a, b, a_prev, b_prev };
+                        max_diff = diff;
+                    }
+                } else {
+                    break ;
+                }
+            }
+
+            if (max_diff > 0) {
+                flip_route_section(move[0], move[1]);
+
+                for (auto x : move) {
+                    if (std::find(checklist.begin() + static_cast<int32_t>(checklist_pos_pos),
+                                checklist.end(), x) == checklist.end()) {
+                        checklist.push_back(x);
+                    }
+                }
+                ++changes_count;
+                cost_change -= max_diff;
+            }
+        }
+        assert(instance.is_route_valid(route_));
+        cost_ += cost_change;
+    }
+
+    std::vector<uint32_t> route_;
+    std::vector<uint32_t> positions_;  // node to index in route_ mapping
+    double cost_ = 0;
+    CostFunction cost_fn_;
+};
+
+
+
 template<typename T>
 bool contains(const std::vector<T> &vec, T value) {
     return std::find(vec.begin(), vec.end(), value) != vec.end();
@@ -1520,6 +1886,588 @@ run_mfaco(const ProblemInstance &problem,
 
     return unique_ptr<Solution>(dynamic_cast<Solution*>(best_ant.release()));
 }
+
+LinkedRoute calculate_route(LinkedRoute route, vector<pair<int, int>>& new_routes) {
+
+    LinkedRoute result {route.route_, route.cost_fn_ };
+    return result;
+
+    uint32_t n = new_routes.size();
+    vector<vector<double>> dp(n, vector<double>(1 << n, std::numeric_limits<double>::lowest()));
+    for (int i = 0; i < n; ++i) {
+        dp[i][1 << i] = 0;
+    }
+    for (int i = 0; i < n; ++i) {
+        for (int mask = 0; mask < 1 << n; ++mask) {
+
+        }
+    }
+    
+}
+
+template<typename ComputationsLog_t>
+std::unique_ptr<Solution> 
+run_dfaco(const ProblemInstance &problem,
+                const ProgramOptions &opt,
+                ComputationsLog_t &comp_log) {
+
+    const auto dimension  = problem.dimension_;  
+    const auto cl_size    = opt.cand_list_size_;
+    const auto bl_size    = opt.backup_list_size_;
+    const auto ants_count = opt.ants_count_;
+    const auto iterations = opt.iterations_;
+    const auto use_ls     = opt.local_search_ != 0;
+
+    Timer start_sol_timer;
+    const auto start_routes = par_build_initial_routes(problem, use_ls);
+    auto start_sol_count = start_routes.size();
+    std::vector<double> start_costs(start_sol_count);
+
+    #pragma omp parallel default(none) shared(start_sol_count, problem, start_costs, start_routes)
+    #pragma omp for
+    for (size_t i = 0; i < start_sol_count; ++i) {
+        start_costs[i] = problem.calculate_route_length(start_routes[i]);
+    }
+    comp_log("initial solutions build time", start_sol_timer.get_elapsed_seconds());
+
+    auto smallest_pos = std::distance(begin(start_costs),
+                                      min_element(begin(start_costs), end(start_costs)));
+    auto initial_cost = start_costs[smallest_pos];
+    const auto &start_route = start_routes[smallest_pos];
+    comp_log("initial sol cost", initial_cost);
+
+    HeuristicData heuristic(problem, opt.beta_);
+    vector<double> cl_heuristic_cache;
+
+    cl_heuristic_cache.resize(cl_size * dimension);
+    for (uint32_t node = 0 ; node < dimension ; ++node) {
+        auto cache_it = cl_heuristic_cache.begin() + node * cl_size;
+
+        for (auto &nn : problem.get_nearest_neighbors(node, cl_size)) {
+            *cache_it++ = heuristic.get(node, nn);
+        }
+    }
+
+    // Probabilistic model based on pheromone trails:
+    CandListModel model(problem, opt);
+    // If the LS is on, the differences between pheromone trails should be
+    // smaller -- we use calc_trail_limits_cl instead of calc_trail_limits
+    model.calc_trail_limits_ = !use_ls ? calc_trail_limits : calc_trail_limits_cl;
+    model.init(initial_cost);
+    auto &pheromone = model.get_pheromone();
+    pheromone.set_all_trails(model.trail_limits_.max_);
+
+    vector<double> nn_product_cache(dimension * cl_size);
+
+    auto best_ant = make_unique<Ant>(start_route, initial_cost);
+
+    vector<Ant> ants(ants_count);
+    for (auto &ant : ants) {
+        ant = *best_ant;
+    }
+
+    Ant *iteration_best = nullptr;
+
+    auto source_solution = make_unique<Solution>(start_route, best_ant->cost_);
+
+    // The following are mainly for raporting purposes
+    Trace<ComputationsLog_t, SolutionCost> best_cost_trace(comp_log,
+                                                           "best sol cost", iterations, 1, true, 1.);
+    Trace<ComputationsLog_t, double> mean_cost_trace(comp_log, "sol cost mean", iterations, 20);
+    Trace<ComputationsLog_t, double> stdev_cost_trace(comp_log, "sol cost stdev", iterations, 20);
+    Timer main_timer;
+
+    vector<double> sol_costs(ants_count);
+
+    double  pher_deposition_time = 0;
+    int32_t ant_sol_updates = 0;
+    int32_t local_source_sol_updates = 0;
+    int32_t total_new_edges = 0;
+
+    #pragma omp parallel default(shared)
+    {
+        // Endpoints of new edges (not present in source_route) are inserted
+        // into ls_checklist and later used to guide local search
+        vector<uint32_t> ls_checklist;
+        ls_checklist.reserve(dimension);
+
+        for (int32_t iteration = 0 ; iteration < iterations ; ++iteration) {
+            #pragma omp barrier
+
+            // Load pheromone * heuristic for each edge connecting nearest
+            // neighbors (up to cl_size)
+            #pragma omp for schedule(static)
+            for (uint32_t node = 0 ; node < dimension ; ++node) {
+                auto cache_it = nn_product_cache.begin() + node * cl_size;
+                auto heuristic_it = cl_heuristic_cache.begin() + node * cl_size;
+                for (auto &nn : problem.get_nearest_neighbors(node, cl_size)) {
+                    *cache_it++ = *heuristic_it++ * pheromone.get(node, nn);
+                }
+            }
+
+            Route local_source{ source_solution->route_, problem.get_distance_fn() };
+            local_source.cost_ = source_solution->cost_;
+
+            //Mask visited(dimension);
+            Bitmask visited(dimension);
+
+            // Changing schedule from "static" to "dynamic" can speed up
+            // computations a bit, however it introduces non-determinism due to
+            // threads scheduling. With "static" the computations always follow
+            // the same path -- i.e. if we run the program with the same PRNG
+            // seed (--seed X) then we get exactly the same results.
+            #pragma omp for schedule(static, 1) reduction(+ : ant_sol_updates, local_source_sol_updates, total_new_edges)
+            for (uint32_t ant_idx = 0; ant_idx < ants.size(); ++ant_idx) {
+                const auto target_new_edges = opt.min_new_edges_;
+
+                auto &ant = ants[ant_idx];
+                // ant.initialize(dimension);
+                LinkedRoute route { local_source };  // We use "external" route and only copy it back to ant
+
+                auto start_node = get_rng().next_uint32(dimension);
+                // ant.visit(start_node);
+                visited.clear();
+                visited.set_bit(start_node);
+
+                ls_checklist.clear();
+
+                // We are counting edges (undirected) that are not present in
+                // the source_route. The factual # of new edges can be +1 as we
+                // skip the check for the closing edge (minor optimization).
+                uint32_t new_edges = 0;
+                auto curr_node = start_node;
+                uint32_t visited_count = 1;
+
+                vector<pair<int, int>> new_routes;
+
+                bool broken_paths = false;
+                while (!broken_paths && visited_count < dimension) {
+                    auto curr = curr_node;
+
+                    if (new_edges == target_new_edges - 1) {
+                        visited.set_bit(route.get_succ(curr));
+                    }
+
+                    auto sel = select_next_node(pheromone, heuristic,
+                                                problem.get_nearest_neighbors(curr, cl_size),
+                                                nn_product_cache,
+                                                problem.get_backup_neighbors(curr, cl_size, bl_size),
+                                                curr,
+                                                visited);
+
+                    const auto curr_succ = route.get_succ(curr);
+                    const auto sel_pred = route.get_pred(sel);
+
+                    visited.set_bit(sel);
+                    ++visited_count;
+
+                    if (sel == curr_succ) {
+                        continue;
+                    }
+
+                    // new route [curr_succ, sel_pred]
+                    if (route.in_cycle(sel)) {
+                        new_routes.emplace_back(curr_succ, sel_pred);
+                        route.relocate_node(curr, sel);
+                        new_edges++;
+                    } else {
+                        // [0, t + 1, cycle_size), [cycle_size, node, pos_end_path_node+1)
+                        // break the selected route
+                        uint32_t sel_end_route = -1;
+                        for (int i = 0; i < (int)new_routes.size(); ++i) {
+                            auto broken_route = new_routes[i];
+                            if (route.include(broken_route.first, broken_route.second, sel)) {
+                                sel_end_route = broken_route.second;
+
+                                if (sel != broken_route.first) {
+                                    new_routes.emplace_back(broken_route.first, route.get_pred(sel));
+                                }
+
+                                new_routes.emplace_back(route.route_[0], broken_route.second);
+
+                                break;
+                            }
+                        }
+                        assert(sel_end_route != -1);
+
+                        route.relocate_outcycle_node(curr, sel, sel_end_route);
+                        broken_paths = true;
+                    }
+                    
+                    curr_node = sel;
+                }
+
+                // dp something
+                //route = calculcate_route(route, new_routes);
+
+
+
+                if (use_ls) {
+                    route.two_opt_nn(problem, ls_checklist, opt.ls_cand_list_size_);
+                }
+
+                sol_costs[ant_idx] = ant.cost_;
+            }
+
+            #pragma omp master
+            {
+                iteration_best = &ants.front();
+                for (auto &ant : ants) {
+                    if (ant.cost_ < iteration_best->cost_) {
+                        iteration_best = &ant;
+                    }
+                }
+                if (iteration_best->cost_ < best_ant->cost_) {
+                    best_ant->update(iteration_best->route_, iteration_best->cost_);
+
+                    auto error = problem.calc_relative_error(best_ant->cost_);
+                    best_cost_trace.add({ best_ant->cost_, error }, iteration, main_timer());
+
+                    model.update_trail_limits(best_ant->cost_);
+                }
+
+                mean_cost_trace.add(round(sample_mean(sol_costs), 1), iteration);
+                stdev_cost_trace.add(round(sample_stdev(sol_costs), 1), iteration);
+            }
+
+            // Synchronize threads before pheromone update
+            #pragma omp barrier
+
+            model.evaporate_pheromone();
+
+            #pragma omp master
+            {
+                bool use_best_ant = (get_rng().next_float() < opt.gbest_as_source_prob_);
+                auto &update_ant = use_best_ant ? *best_ant : *iteration_best;
+
+                double start = omp_get_wtime();
+
+                // Increase pheromone values on the edges of the new
+                // source_solution
+                model.deposit_pheromone(update_ant);
+
+                pher_deposition_time += omp_get_wtime() - start;
+
+                source_solution->update(update_ant.route_, update_ant.cost_);
+            }
+        }
+    }
+    comp_log("pher_deposition_time", pher_deposition_time);
+    comp_log("ants solutions updates", ant_sol_updates);
+    comp_log("local source solutions updates", local_source_sol_updates);
+    comp_log("total new edges", total_new_edges);
+
+    return unique_ptr<Solution>(dynamic_cast<Solution*>(best_ant.release()));
+}
+
+template<typename ComputationsLog_t>
+std::unique_ptr<Solution> 
+run_raco(const ProblemInstance &problem,
+                const ProgramOptions &opt,
+                ComputationsLog_t &comp_log) {
+
+    const auto dimension  = problem.dimension_;  
+    const auto cl_size    = opt.cand_list_size_;
+    const auto bl_size    = opt.backup_list_size_;
+    const auto ants_count = opt.ants_count_;
+    const auto iterations = opt.iterations_;
+    const auto use_ls     = opt.local_search_ != 0;
+
+    Timer start_sol_timer;
+    const auto start_routes = par_build_initial_routes(problem, use_ls);
+    auto start_sol_count = start_routes.size();
+    std::vector<double> start_costs(start_sol_count);
+
+    #pragma omp parallel default(none) shared(start_sol_count, problem, start_costs, start_routes)
+    #pragma omp for
+    for (size_t i = 0; i < start_sol_count; ++i) {
+        start_costs[i] = problem.calculate_route_length(start_routes[i]);
+    }
+    comp_log("initial solutions build time", start_sol_timer.get_elapsed_seconds());
+
+    auto smallest_pos = std::distance(begin(start_costs),
+                                      min_element(begin(start_costs), end(start_costs)));
+    auto initial_cost = start_costs[smallest_pos];
+    const auto &start_route = start_routes[smallest_pos];
+    comp_log("initial sol cost", initial_cost);
+
+    HeuristicData heuristic(problem, opt.beta_);
+    vector<double> cl_heuristic_cache;
+
+    cl_heuristic_cache.resize(cl_size * dimension);
+    for (uint32_t node = 0 ; node < dimension ; ++node) {
+        auto cache_it = cl_heuristic_cache.begin() + node * cl_size;
+
+        for (auto &nn : problem.get_nearest_neighbors(node, cl_size)) {
+            *cache_it++ = heuristic.get(node, nn);
+        }
+    }
+
+    // Probabilistic model based on pheromone trails:
+    CandListModel model(problem, opt);
+    // If the LS is on, the differences between pheromone trails should be
+    // smaller -- we use calc_trail_limits_cl instead of calc_trail_limits
+    model.calc_trail_limits_ = !use_ls ? calc_trail_limits : calc_trail_limits_cl;
+    model.init(initial_cost);
+
+    if (opt.smooth_) {
+        model.init_trail_limits_smooth();
+    }
+
+    auto &pheromone = model.get_pheromone();
+    pheromone.set_all_trails(model.trail_limits_.max_);
+
+    vector<double> nn_product_cache(dimension * cl_size);
+
+    auto best_ant = make_unique<Ant>(start_route, initial_cost);
+
+    vector<Ant> ants(ants_count);
+    for (auto &ant : ants) {
+        ant = *best_ant;
+    }
+
+    Ant *iteration_best = nullptr;
+
+    auto source_solution = make_unique<Solution>(start_route, best_ant->cost_);
+
+    // The following are mainly for raporting purposes
+    Trace<ComputationsLog_t, SolutionCost> best_cost_trace(comp_log,
+                                                           "best sol cost", iterations, 1, true, 1.);
+    Trace<ComputationsLog_t, double> mean_cost_trace(comp_log, "sol cost mean", iterations, 20);
+    Trace<ComputationsLog_t, double> stdev_cost_trace(comp_log, "sol cost stdev", iterations, 20);
+    Timer main_timer;
+
+    vector<double> sol_costs(ants_count);
+
+    double  pher_deposition_time = 0;
+    int32_t ant_sol_updates = 0;
+    int32_t local_source_sol_updates = 0;
+    int32_t total_new_edges = 0;
+
+    double construction_time = 0;
+    double ls_time = 0;
+    double select_next_time = 0;
+    double relocation_time = 0;
+    uint32_t loop_count = 0;
+
+    auto min_new_edges = opt.min_new_edges_;
+
+    #pragma omp parallel default(shared)
+    {
+        // Endpoints of new edges (not present in source_route) are inserted
+        // into ls_checklist and later used to guide local search
+        vector<uint32_t> ls_checklist;
+        ls_checklist.reserve(dimension);
+
+        for (int32_t iteration = 0 ; iteration < iterations ; ++iteration) {
+            #pragma omp barrier
+
+            // Load pheromone * heuristic for each edge connecting nearest
+            // neighbors (up to cl_size)
+            #pragma omp for schedule(static)
+            for (uint32_t node = 0 ; node < dimension ; ++node) {
+                auto cache_it = nn_product_cache.begin() + node * cl_size;
+                auto heuristic_it = cl_heuristic_cache.begin() + node * cl_size;
+                for (auto &nn : problem.get_nearest_neighbors(node, cl_size)) {
+                    *cache_it++ = *heuristic_it++ * pheromone.get(node, nn);
+                }
+            }
+
+            Route local_source{ source_solution->route_, problem.get_distance_fn() };
+            local_source.cost_ = source_solution->cost_;
+
+            //Mask visited(dimension);
+            Bitmask visited(dimension);
+
+            // Changing schedule from "static" to "dynamic" can speed up
+            // computations a bit, however it introduces non-determinism due to
+            // threads scheduling. With "static" the computations always follow
+            // the same path -- i.e. if we run the program with the same PRNG
+            // seed (--seed X) then we get exactly the same results.
+            #pragma omp for schedule(static, 1) reduction(+ : loop_count, relocation_time, select_next_time, construction_time, ls_time, ant_sol_updates, local_source_sol_updates, total_new_edges)
+            for (uint32_t ant_idx = 0; ant_idx < ants.size(); ++ant_idx) {
+                const auto target_new_edges = min_new_edges;
+
+                auto &ant = ants[ant_idx];
+                // ant.initialize(dimension);
+                Route route { local_source };  // We use "external" route and only copy it back to ant
+
+                auto start_node = get_rng().next_uint32(dimension);
+                // ant.visit(start_node);
+                visited.clear();
+                visited.set_bit(start_node);
+
+                ls_checklist.clear();
+
+                // We are counting edges (undirected) that are not present in
+                // the source_route. The factual # of new edges can be +1 as we
+                // skip the check for the closing edge (minor optimization).
+                uint32_t new_edges = 0;
+                auto curr_node = start_node;
+                uint32_t visited_count = 1;
+
+                double start_cs = omp_get_wtime();
+                while (new_edges < target_new_edges && visited_count < dimension) {
+                    loop_count += 1;
+
+                    auto curr = curr_node;
+                    // if (opt.force_new_edge_) {
+                    //     visited.set_bit(route.get_succ(curr));
+                    // }
+
+                    double start_snn = omp_get_wtime();
+                    auto sel = select_next_node(pheromone, heuristic,
+                                                problem.get_nearest_neighbors(curr, cl_size),
+                                                nn_product_cache,
+                                                problem.get_backup_neighbors(curr, cl_size, bl_size),
+                                                curr,
+                                                visited);
+                    select_next_time += omp_get_wtime() - start_snn;
+
+                    // if (opt.force_new_edge_) {
+                    //     visited.clear_bit(route.get_succ(curr));
+                    // }
+
+                    const auto sel_pred = route.get_pred(sel);
+
+                    visited.set_bit(sel);
+                    ++visited_count;
+
+                    double start_rn = omp_get_wtime();
+                    route.relocate_node(curr, sel);  // Place sel node just after curr node
+                    relocation_time += omp_get_wtime() - start_rn;
+
+                    curr_node = sel;
+
+                    if (!local_source.contains_edge(curr, sel)) {
+                        /*
+                        For simplicity and efficiency, we are looking only at
+                        the (curr, sel) edge even though the relocation could
+                        have created additional new edges.
+
+                        Actually, we can have up to 3 new edges, however the
+                        subsequent moves can break some of these, so the final
+                        number can be much smaller.
+                        */
+                        new_edges += 1;
+
+                        if (!contains(ls_checklist, curr)) { ls_checklist.push_back(curr); }
+                        if (!contains(ls_checklist, sel)) { ls_checklist.push_back(sel); }
+                        if (!contains(ls_checklist, sel_pred)) { ls_checklist.push_back(sel_pred); }
+                    }
+                }
+
+                construction_time += omp_get_wtime() - start_cs;
+
+                if (opt.count_new_edges_) {  // How many new edges are in the new sol. actually?
+                    total_new_edges += count_diff_edges(route, local_source);
+                }
+
+                if (use_ls) {
+                    double start = omp_get_wtime();
+                    route.two_opt_nn(problem, ls_checklist, opt.ls_cand_list_size_);
+                    ls_time += omp_get_wtime() - start;
+                }
+
+                // No need to recalculate route length -- we are updating it along with the changes
+                // resp. to the current local source solution
+                // ant.cost_ = problem.calculate_route_length(route.route_);
+                assert( abs(problem.calculate_route_length(route.route_) - route.cost_) < 1e-6 );
+
+                // This is a minor optimization -- if we have not found a better sol., then
+                // we are unlikely to become new source solution (in the next iteration).
+                // In other words, we save the new solution only if it is an improvement.
+                if (!opt.keep_better_ant_sol_ 
+                        || (opt.keep_better_ant_sol_ && route.cost_ < ant.cost_)) {
+                    ant.cost_  = route.cost_;
+                    ant.route_ = route.route_;
+
+                    ++ant_sol_updates;
+                }
+
+                // We can benefit immediately from the improved solution by
+                // updating the current local source solution.
+                if (opt.source_sol_local_update_ && route.cost_ < local_source.cost_) {
+                    local_source = Route{ route.route_, problem.get_distance_fn() };
+                    local_source.cost_ = route.cost_;
+
+                    ++local_source_sol_updates;
+                }
+                sol_costs[ant_idx] = ant.cost_;
+            }
+
+            #pragma omp master
+            {
+                iteration_best = &ants.front();
+                for (auto &ant : ants) {
+                    if (ant.cost_ < iteration_best->cost_) {
+                        iteration_best = &ant;
+                    }
+                }
+                if (iteration_best->cost_ < best_ant->cost_) {
+                    best_ant->update(iteration_best->route_, iteration_best->cost_);
+
+                    auto error = problem.calc_relative_error(best_ant->cost_);
+                    best_cost_trace.add({ best_ant->cost_, error }, iteration, main_timer());
+
+                    if (!opt.smooth_) {
+                        model.update_trail_limits(best_ant->cost_);
+                    }
+                }
+
+                // if (iteration % 1000 == 0) {
+                //     auto error = problem.calc_relative_error(best_ant->cost_);
+                //     best_cost_trace.add({ best_ant->cost_, error }, iteration, main_timer());
+                // }
+
+                mean_cost_trace.add(round(sample_mean(sol_costs), 1), iteration);
+                stdev_cost_trace.add(round(sample_stdev(sol_costs), 1), iteration);
+            }
+
+            // Synchronize threads before pheromone update
+            #pragma omp barrier
+
+            if (opt.smooth_) {
+                model.evaporate_pheromone_smooth();
+            } else {
+                model.evaporate_pheromone();
+            }
+
+            #pragma omp master
+            {
+                bool use_best_ant = (get_rng().next_float() < opt.gbest_as_source_prob_);
+                auto &update_ant = use_best_ant ? *best_ant : *iteration_best;
+
+                double start = omp_get_wtime();
+
+                // Increase pheromone values on the edges of the new
+                // source_solution
+                if (opt.smooth_) {
+                    model.deposit_pheromone_smooth(update_ant);
+                } else {
+                    model.deposit_pheromone(update_ant);
+                }
+
+                pher_deposition_time += omp_get_wtime() - start;
+
+                source_solution->update(update_ant.route_, update_ant.cost_);
+
+            }
+        }
+    }
+    comp_log("pher_deposition_time", pher_deposition_time);
+    comp_log("ants solutions updates", ant_sol_updates);
+    comp_log("local source solutions updates", local_source_sol_updates);
+    comp_log("total new edges", total_new_edges);
+    comp_log("tour construction time", construction_time);
+    comp_log("select next node time", select_next_time);
+    comp_log("relocation node time", relocation_time);
+    comp_log("local search time", ls_time);
+    comp_log("loop count", loop_count);
+
+    return unique_ptr<Solution>(dynamic_cast<Solution*>(best_ant.release()));
+}
+
 
 std::string get_results_filename(const ProblemInstance &problem,
                                  const std::string &alg_name) {
