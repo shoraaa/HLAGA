@@ -17,6 +17,10 @@
 #include "kd_tree.h"
 #include "utils.h"
 
+#include "env.h"
+
+#include <iostream>
+
 #ifndef M_PI
     #define M_PI 3.14159265358979323846
 #endif
@@ -131,6 +135,8 @@ struct ProblemInstance {
     // k-d tree instance for efficient computation of the nearest neighbors
     mutable std::unique_ptr<KDTree> kdtree_ = nullptr;
 
+    // TEnvironment* ga_eax_solver_;
+
 
     ProblemInstance(uint32_t dimension,
                     EdgeWeightType edge_weight_type,
@@ -165,6 +171,14 @@ struct ProblemInstance {
             }
             distance_matrix_ = mat;
         }
+
+        // GA-EAX
+        // ga_eax_solver_ = new TEnvironment();
+        // ga_eax_solver_->fNumOfPop = 100;
+        // ga_eax_solver_->fNumOfKids = 30;
+        // ga_eax_solver_->fFileNameInitPop = nullptr;
+        // ga_eax_solver_->fEvaluator->SetInstance(dimension_, coords_);
+
     }
 
     void compute_nn_lists(uint32_t nn_count) {

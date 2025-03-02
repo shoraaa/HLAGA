@@ -26,7 +26,7 @@ struct ComputationsLog {
 
     template<typename T>
     void operator()(const std::string &key, const T &value, bool is_update=false) {
-        // out_ << key << ": "  << value << '\n';
+        out_ << key << ": "  << value << '\n';
         if (!is_update) {
             log_[key] = value;
         }

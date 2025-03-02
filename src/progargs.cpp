@@ -105,9 +105,35 @@ ProgramOptions parse_program_options(int argc, char *argv[]) {
 
     p.add("count-new-edges", "Should the actual # of new edges be checked", opts.count_new_edges_);
 
-    p.add("smooth", "should we use smoothen pheromone update?", opts.smooth_);
-
     p.add("rho-min", "Minimum pheromone for SMMAS algorithm", opts.rho_min_);
+
+    p.add("min-ants", "Minimum # of ants for FLARE-ACO", opts.min_ants_);
+
+    p.add("max-ants", "Maximum # of ants for FLARE-ACO", opts.max_ants_);
+
+    p.add("time-limit", "Time limit for FLARE-ACO", opts.time_limit_);
+
+    p.add("pop-size", "Population size for GA", opts.pop_size_);
+
+    p.add("use-ga", "Use GA in FLARE-ACO", opts.use_ga_);
+
+    p.add("init-pop-size", "Initial population size for inital GA", opts.init_pop_size_);
+
+    p.add("init-kid-size", "Initial kids size for initial GA", opts.init_kids_size_);
+
+    p.add("kid-size", "Kids size for GA", opts.kids_size_);
+
+    p.add("smooth", "Use smooth MMAS", opts.smooth_);
+
+    p.add("three-level", "Use 3-level MMAS", opts.three_level_);
+
+    p.add("lazy-pheromone-update", "Use lazy pheromone update", opts.lazy_pheromone_update_);
+
+    p.add("path-length", "Path length for FLARE-ACO", opts.path_length_);
+    
+    p.add("count-delete-edges", "Count delete edges for FLARE-ACO", opts.count_delete_edges_);
+    
+    p.add("diff-edges-pheromone-gain", "Difference edges pheromone gain for FLARE-ACO", opts.diff_edges_pheromone_gain_);
 
     p.parse(argc, argv);
 

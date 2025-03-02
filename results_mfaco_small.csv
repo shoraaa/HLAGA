@@ -1,0 +1,9 @@
+Ant,Iterations,beta,rho,Backup,Candidate,MNE,LS,LS Candidate
+64,5000,1,0.5,64,16,8,1,20
+Algorithm,mfaco,Runs,100
+Instance,Mean Cost,Min Cost,Max Cost,STDEV,Mean Error,Min Error,Max Error,Mean Time
+instances/lin318.tsp,42132,42029,42333,57.2799,0.246877,0,0.72331,1.86422
+instances/pcb442.tsp,50946,50778,51202,69.4478,0.332388,0,0.835007,1.64256
+instances/att532.tsp,27720,27686,27850,25.0273,0.123131,0,0.592357,2.58744
+instances/rat783.tsp,8834,8813,8876,12.8872,0.327731,0.0794913,0.794913,2.13284
+instances/pr1002.tsp,260072,259078,261485,423.591,0.396518,0.0127391,0.941921,1.73735

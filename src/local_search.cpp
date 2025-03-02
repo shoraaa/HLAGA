@@ -224,6 +224,10 @@ int64_t two_opt_nn(const ProblemInstance &instance,
     // We assume symmetry so that the order of the nodes does not matter
     assert(instance.is_symmetric_);
 
+    if (checklist.empty()) {
+        return 0;
+    }
+
     const auto route_size = route.size();
     std::vector<uint32_t> pos_in_route(route_size);
 

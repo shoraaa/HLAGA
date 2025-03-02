@@ -26,7 +26,7 @@ struct ProgramOptions {
     std::string id_ = "default";  // Id of the comp. experiment
 
     // Probability of using the current global best as a source solution
-    double gbest_as_source_prob_ = 0.01;
+    double gbest_as_source_prob_ = 0.1;
 
     int32_t iterations_ = 5 * 1000;
 
@@ -71,11 +71,52 @@ struct ProgramOptions {
     // solutions be checked?
     int32_t count_new_edges_ = 0;
 
-    // Restricted ACO -- should we use smoothen pheromone update?
-    int32_t smooth_ = 1;
 
-    // Restricted ACO -- minimum rho for smmas
+    // FLARE-ACO -- minimum rho for smmas
     double rho_min_ = -1;
+
+    // FLARE-ACO -- minimum ant
+    int32_t min_ants_ = 16;
+
+    // FLARE-ACO -- maximum ant
+    int32_t max_ants_ = 1024;
+
+    // FLARE-ACO -- time limit
+    int32_t time_limit_ = 0;
+
+    // FLARE-ACO -- use GA
+    int32_t use_ga_ = 0;
+
+    // FLARE-ACO -- init population size
+    int32_t init_pop_size_ = 10;
+
+    // FLARE-ACO -- population size
+    int32_t pop_size_ = 100;
+
+    // FLARE-ACO -- init kids size
+    int32_t init_kids_size_ = 10;
+
+    // FLARE-ACO -- kids size
+    int32_t kids_size_ = 30;
+
+    // FLARE-ACO -- smmas
+    int32_t smooth_ = 0;
+
+    // FLARE-ACO -- 3las
+    int32_t three_level_ = 0;
+
+    // FLARE-ACO -- lazy pheromone update
+    int32_t lazy_pheromone_update_ = 0;
+
+    // FLARE-ACO -- path length
+    int32_t path_length_ = 128;
+
+    // FLARE-ACO -- count delete edges
+    int32_t count_delete_edges_ = 500;
+
+    // FLARE-ACO -- Difference edges pheromone gain
+    double diff_edges_pheromone_gain_ = 0.001;
+
 };
 
 
@@ -104,8 +145,22 @@ void dump(const ProgramOptions &opt, MapT &map) {
     map["source sol local update"] = opt.source_sol_local_update_;
     map["count new edges"] = opt.count_new_edges_;
 
-    map["smooth"] = opt.smooth_;
     map["rho min"] = opt.rho_min_;
+    map["min ants"] = opt.min_ants_;
+    map["max ants"] = opt.max_ants_;
+    map["time limit"] = opt.time_limit_;
+    map["pop size"] = opt.pop_size_;
+    map["use ga"] = opt.use_ga_;
+    map["init pop size"] = opt.init_pop_size_;
+    map["kids size"] = opt.kids_size_;
+    map["init kids size"] = opt.init_kids_size_;
+    map["smooth"] = opt.smooth_;
+    map["three level"] = opt.three_level_;
+    map["lazy pheromone update"] = opt.lazy_pheromone_update_;
+    map["path length"] = opt.path_length_;
+    map["count delete edges"] = opt.count_delete_edges_;
+
+    map["diff edges pheromone gain"] = opt.diff_edges_pheromone_gain_;
 }
 
 ProgramOptions parse_program_options(int argc, char *argv[]);

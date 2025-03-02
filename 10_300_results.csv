@@ -1,0 +1,8 @@
+Ant,Iterations,beta,rho,Backup,Candidate,MNE,LS,LS Candidate
+10,300,1,0.5,64,20,8,1,20
+Algorithm,flaco,Runs,30
+Instance,Mean Cost,Min Cost,Max Cost,STDEV,Mean Error,Min Error,Max Error,Mean Time
+instances/d198.tsp,15786,15780,15811,7.62301,0.0418251,0,0.196451,0.0362187
+instances/p654.tsp,35060,34655,35891,480.811,1.20419,0.034639,3.60246,0.0448845
+instances/zi929.tsp,96153,95801,96454,170.547,0.848463,0.478263,1.16314,0.0548974
+instances/fl1400.tsp,20439,20262,20771,156.422,1.55264,0.670741,3.19968,0.0610894

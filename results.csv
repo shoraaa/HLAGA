@@ -1,0 +1,6 @@
+Ant,Iterations,beta,rho,Backup,Candidate,MNE,LS,LS Candidate
+64,1000,1,0.5,64,16,8,1,20
+Algorithm,flaco,Runs,1
+Instance,Mean Cost,Min Cost,Max Cost,STDEV,Mean Error,Min Error,Max Error,Mean Time
+instances/E10k.0.tsp,73839437,73839437,73839437,0,2.74624,2.74624,2.74624,176.08
+instances/E10k.1.tsp,74089006,74089006,74089006,0,2.85621,2.85621,2.85621,189.604

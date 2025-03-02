@@ -18,7 +18,7 @@ BUILDDIR = build
 
 SRCDIR = src
 
-SOURCES = faco.cpp problem_instance.cpp local_search.cpp utils.cpp rand.cpp progargs.cpp
+SOURCES = faco.cpp problem_instance.cpp local_search.cpp utils.cpp rand.cpp progargs.cpp env.cpp cross.cpp evaluator.cpp indi.cpp rand_.cpp kopt.cpp sort.cpp
 
 OBJS = $(SOURCES:.cpp=.o)
 

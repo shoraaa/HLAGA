@@ -78,6 +78,8 @@ struct Ant : public Solution {
     Bitmask  visited_bitmask_;
     uint32_t dimension_ = 0;
     uint32_t visited_count_ = 0;
+    uint32_t ls_count_= 0;
+    uint32_t path_length_ = 0;
 
     Ant() : Solution() {}
 
