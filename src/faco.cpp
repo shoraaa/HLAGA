@@ -2556,9 +2556,12 @@ run_raco(const ProblemInstance &problem,
     const auto dimension  = problem.dimension_;  
     const auto cl_size    = opt.cand_list_size_;
     const auto bl_size    = opt.backup_list_size_;
-    const auto ants_count = 320; //opt.ants_count_;
+    auto r = 4 * sqrt(problem.dimension_);
+    const auto ants_count = std::min(512u, static_cast<uint32_t>(lround(r / 64) * 64)); //opt.ants_count_;
     const auto iterations = 5000; //opt.iterations_;
     const auto use_ls     = opt.local_search_ != 0;
+
+    cout << "Ants count: " << ants_count << endl;
 
     Timer start_sol_timer;
     const auto start_routes = par_build_initial_routes(problem, use_ls);
