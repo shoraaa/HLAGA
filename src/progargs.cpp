@@ -135,6 +135,8 @@ ProgramOptions parse_program_options(int argc, char *argv[]) {
     
     p.add("diff-edges-pheromone-gain", "Difference edges pheromone gain for FLARE-ACO", opts.diff_edges_pheromone_gain_);
 
+    p.add("force-new-edges", "Force new edges for FLARE-ACO", opts.force_new_edges_);
+
     p.parse(argc, argv);
 
     return opts;

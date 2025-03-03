@@ -115,8 +115,10 @@ struct ProgramOptions {
     int32_t count_delete_edges_ = 500;
 
     // FLARE-ACO -- Difference edges pheromone gain
-    double diff_edges_pheromone_gain_ = 0.001;
+    double diff_edges_pheromone_gain_ = 0.01;
 
+    // force new edges
+    int32_t force_new_edges_ = 1;
 };
 
 
@@ -161,6 +163,7 @@ void dump(const ProgramOptions &opt, MapT &map) {
     map["count delete edges"] = opt.count_delete_edges_;
 
     map["diff edges pheromone gain"] = opt.diff_edges_pheromone_gain_;
+    map["force new edges"] = opt.force_new_edges_;
 }
 
 ProgramOptions parse_program_options(int argc, char *argv[]);
